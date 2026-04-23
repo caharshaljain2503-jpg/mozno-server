@@ -27,6 +27,7 @@ const contactSchema = new mongoose.Schema(
     company: {
       type: String,
       trim: true,
+      required: false,
       default: null,
     },
 
@@ -38,9 +39,10 @@ const contactSchema = new mongoose.Schema(
 
     message: {
       type: String,
-      required: true,
+      required: false,
       trim: true,
       maxlength: 2000,
+      default: ""
     },
 
     // Admin workflow
