@@ -39,7 +39,7 @@ export const contactSchema = z.object({
     .min(1, "Please complete the CAPTCHA."),
 });
 
-/** Pre–questionnaire leads (Financial Health / Risk Profiling) — math captcha, no Google reCAPTCHA */
+/** Pre-questionnaire leads (Financial Health / Risk Profiling) with Google reCAPTCHA */
 export const assessmentLeadSchema = z.object({
   fullName: z
     .string()
@@ -58,11 +58,5 @@ export const assessmentLeadSchema = z.object({
 
   service: z.enum(["financial-health-questionnaire", "risk-profiling-questionnaire"]),
 
-  assessmentCaptcha: z.object({
-    n1: z.coerce.number().int().min(1).max(20),
-    n2: z.coerce.number().int().min(1).max(20),
-    answer: z.union([z.string(), z.number()]),
-    exp: z.coerce.number().int(),
-    sig: z.string().min(32),
-  }),
+  recaptchaToken: z.string().trim().min(1, "Please complete the CAPTCHA."),
 });

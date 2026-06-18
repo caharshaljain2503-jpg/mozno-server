@@ -131,59 +131,60 @@ export const contactForm = async (req, res) => {
     let company;
     let service;
     let message;
-    if (req.body?.assessmentCaptcha && typeof req.body.assessmentCaptcha === "object") {
-      // Handle both assessment leads AND regular contact form with math captcha
-      const isAssessmentLead = req.body.service === "financial-health-questionnaire" || 
-                               req.body.service === "risk-profiling-questionnaire";
-      
-      if (isAssessmentLead) {
-        const validated = assessmentLeadSchema.parse(req.body);
-        const ac = validated.assessmentCaptcha;
-        if (
-          !verifyAssessmentCaptcha({
-            n1: ac.n1,
-            n2: ac.n2,
-            answer: ac.answer,
-            exp: ac.exp,
-            sig: ac.sig,
-          })
-        ) {
-          return res.status(400).json({
-            success: false,
-            message: "Wrong answer or expired verification. Please solve the math again.",
-          });
-        }
-        fullName = validated.fullName;
-        email = validated.email;
-        phone = validated.phone;
-        company = null;
-        service = ASSESSMENT_SERVICE_LABEL[validated.service];
-        message = formatAssessmentMessage(validated.service, validated.message);
-      } else {
-        // Regular contact form with math captcha
-        const validated = contactSchema.omit({ recaptchaToken: true }).parse(req.body);
-        const ac = req.body.assessmentCaptcha;
-        if (
-          !verifyAssessmentCaptcha({
-            n1: ac.n1,
-            n2: ac.n2,
-            answer: ac.answer,
-            exp: ac.exp,
-            sig: ac.sig,
-          })
-        ) {
-          return res.status(400).json({
-            success: false,
-            message: "Wrong answer or expired verification. Please solve the math again.",
-          });
-        }
-        fullName = validated.fullName;
-        email = validated.email;
-        phone = validated.phone;
-        company = validated.company;
-        service = validated.service;
-        message = validated.message;
+    const isAssessmentLead =
+      req.body?.service === "financial-health-questionnaire" ||
+      req.body?.service === "risk-profiling-questionnaire";
+
+    if (isAssessmentLead) {
+      const validated = assessmentLeadSchema.parse(req.body);
+      const { recaptchaToken } = validated;
+
+      if (!process.env.RECAPTCHA_SECRET_KEY) {
+        console.error("RECAPTCHA_SECRET_KEY is not set - assessment lead CAPTCHA disabled");
+        return res.status(503).json({
+          success: false,
+          message: "Form temporarily unavailable. Please try again later.",
+        });
       }
+
+      const captchaOk = await verifyRecaptchaV2(recaptchaToken, req.ip);
+      if (!captchaOk) {
+        return res.status(400).json({
+          success: false,
+          message: "CAPTCHA verification failed. Please try again.",
+        });
+      }
+
+      fullName = validated.fullName;
+      email = validated.email;
+      phone = validated.phone;
+      company = null;
+      service = ASSESSMENT_SERVICE_LABEL[validated.service];
+      message = formatAssessmentMessage(validated.service, validated.message);
+    } else if (req.body?.assessmentCaptcha && typeof req.body.assessmentCaptcha === "object") {
+      // Regular contact form with math captcha.
+      const validated = contactSchema.omit({ recaptchaToken: true }).parse(req.body);
+      const ac = req.body.assessmentCaptcha;
+      if (
+        !verifyAssessmentCaptcha({
+          n1: ac.n1,
+          n2: ac.n2,
+          answer: ac.answer,
+          exp: ac.exp,
+          sig: ac.sig,
+        })
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Wrong answer or expired verification. Please solve the math again.",
+        });
+      }
+      fullName = validated.fullName;
+      email = validated.email;
+      phone = validated.phone;
+      company = validated.company;
+      service = validated.service;
+      message = validated.message;
     } else {
       const validatedData = contactSchema.parse(req.body);
       fullName = validatedData.fullName;
