@@ -1,5 +1,7 @@
 import express from "express";
 import { config } from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import db from "./src/configs/db.js";
 import adminRouter from "./src/routes/admin.route.js";
 import cors from "cors";
@@ -7,8 +9,10 @@ import DashRouter from "./src/routes/dashboard.route.js";
 import blogRouter from "./src/routes/blog.route.js";
 import careerRouter from "./src/routes/career.route.js";
 import contactRoute from "./src/routes/contact.routes.js";
+import assessmentResultRouter from "./src/routes/assessmentResult.routes.js";
 import router from "./src/routes/analyticsRoutes.js";
 import testimonialRouter from "./src/routes/testimonials.routes.js";
+
 import seoRouter from "./src/routes/seo.routes.js";
 import marketRouter from "./src/routes/market.routes.js";
 import settingsRouter from "./src/routes/settings.routes.js";
@@ -21,8 +25,10 @@ import redis from "./src/configs/redis.js";
 import cron from "node-cron";
 import mongoose from "mongoose";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-config();
+config({ path: path.join(__dirname, ".env") });
 if (!process.env.SECRET_KEY) {
   process.env.SECRET_KEY = "dev-secret-key";
 }
@@ -182,6 +188,7 @@ app.use((req, res, next) => {
 // Body parser middlewares
 app.use(express.json({ limit: "15mb" }));
 app.use(express.urlencoded({ extended: true, limit: "15mb" }));
+app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")));
 
 // Ensure DB is available before hitting DB-backed routes.
 app.use(async (req, res, next) => {
@@ -262,7 +269,9 @@ app.use("/api/admin/dashboard", DashRouter);
 app.use("/api/blogs", blogRouter);
 app.use("/api/career", careerRouter);
 app.use("/api/contact", contactRoute);
+app.use("/api/assessment-result", assessmentResultRouter);
 app.use("/api/analytics", router);
+
 app.use("/api/testimonials", testimonialRouter);
 app.use("/api/seo", seoRouter);
 app.use("/api/market", marketRouter);

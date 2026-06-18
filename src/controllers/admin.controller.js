@@ -4,6 +4,7 @@ import Admin from "../models/admin.model.js";
 import sendMail from "../utils/mailer.js";
 import jwt from "jsonwebtoken";
 import redis from "../configs/redis.js";
+import { verifyRecaptchaV2 } from "../utils/recaptcha.util.js";
 
 // ==================== AUTH CONTROLLERS ====================
 const SEEDED_ADMIN_EMAILS = ["admin@mozno.in", "admin@monzo.in"];
@@ -22,7 +23,7 @@ async function findAdminByLoginEmail(normalizedEmail) {
 
 export const adminLogin = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, recaptchaToken } = req.body;
     console.log("Request for login:", email);
     const normalizedEmail = email?.toLowerCase();
     const seededAdmin = isSeededAdminEmail(normalizedEmail);
@@ -33,6 +34,22 @@ export const adminLogin = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Email and password are required",
+      });
+    }
+
+    if (!process.env.RECAPTCHA_SECRET_KEY) {
+      console.error("RECAPTCHA_SECRET_KEY is not set — admin CAPTCHA disabled");
+      return res.status(503).json({
+        success: false,
+        message: "Admin login temporarily unavailable. Please try again later.",
+      });
+    }
+
+    const captchaOk = await verifyRecaptchaV2(recaptchaToken, req.ip);
+    if (!captchaOk) {
+      return res.status(400).json({
+        success: false,
+        message: "CAPTCHA verification failed. Please try again.",
       });
     }
 

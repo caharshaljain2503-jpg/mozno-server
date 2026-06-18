@@ -50,7 +50,12 @@ const siteSettingsSchema = new Schema(
       },
       mapLink: {
         type: String,
-        default: "https://maps.app.goo.gl/VQSp7vAJ3kTvGcW47",
+        default: "https://maps.app.goo.gl/STjHCGiRPECf3hJR6?g_st=ac",
+        trim: true,
+      },
+      mapEmbedUrl: {
+        type: String,
+        default: "",
         trim: true,
       },
     },

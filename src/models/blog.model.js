@@ -15,12 +15,15 @@ const blogSchema = new Schema(
     },
     subTitle: {
       type: String,
-      maxlength: 200,
+      required: true,
+    },
+    paragraph: {
+      type: String,
+      required: true,
     },
     description: {
       type: String,
       required: true,
-      minlength: 10,
     },
     category: {
       type: String,
@@ -30,7 +33,8 @@ const blogSchema = new Schema(
       type: String,
       required: true,
       validate: {
-        validator: (v) => /^https?:\/\/.+\.(jpg|jpeg|png|webp|gif)$/i.test(v),
+        validator: (v) =>
+          /^https?:\/\/.+\.(jpg|jpeg|png|webp|gif)(?:[?#].*)?$/i.test(v),
         message: (props) => `${props.value} is not a valid image URL!`,
       },
     },

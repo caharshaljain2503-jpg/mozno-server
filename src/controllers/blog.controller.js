@@ -2,19 +2,44 @@ import imagekit from "../configs/imageKit.js";
 import Blog from "../models/blog.model.js";
 import mongoose from "mongoose";
 import Comment from '../models/comment.model.js'
+import fs from "fs/promises";
+import path from "path";
 
-export const addBlog = async (req, res) => {
-  try {
-    const { title, subTitle, description, category, isPublished } = req.body;
-    const imageFile = req.file;
+const allowedCategories = [
+  "All",
+  "Product Info",
+  "Price Updates",
+  "Technical Guides",
+  "Market Insights",
+  "Personal Finance",
+  "Tax Planning",
+  "Investments",
+  "Insurance",
+  "Retirement",
+  "Succession",
+  "Wealth Management",
+  "Tech",
+  "E-commerce",
+  "Social Media",
+  "Digital Marketing",
+  "Other",
+];
 
-    if (!title || !description || !category || !imageFile) {
-      return res.status(400).json({
-        success: false,
-        message: "Title, description, category, and image are required.",
-      });
-    }
+const hasImageKitConfig =
+  !!process.env.IMAGEKIT_PUBLIC_KEY &&
+  !!process.env.IMAGEKIT_PRIVATE_KEY &&
+  !!process.env.IMAGEKIT_URL_ENDPOINT;
 
+const slugifyFilePart = (value) =>
+  String(value || "image")
+    .toLowerCase()
+    .replace(/\.[^.]+$/, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "image";
+
+const uploadBlogImage = async (imageFile, req) => {
+  if (hasImageKitConfig) {
     const fileBase64 = imageFile.buffer.toString("base64");
 
     const response = await imagekit.upload({
@@ -23,7 +48,7 @@ export const addBlog = async (req, res) => {
       folder: "/blogs",
     });
 
-    const optimizedImageUrl = imagekit.url({
+    return imagekit.url({
       path: response.filePath,
       transformation: [
         { quality: "auto" },
@@ -31,17 +56,52 @@ export const addBlog = async (req, res) => {
         { width: "1280" },
       ],
     });
+  }
 
-    const image = optimizedImageUrl;
+  if (process.env.NODE_ENV === "production") {
+    throw Object.assign(
+      new Error(
+        "Image upload is not configured. Set IMAGEKIT_PUBLIC_KEY, IMAGEKIT_PRIVATE_KEY and IMAGEKIT_URL_ENDPOINT.",
+      ),
+      { statusCode: 503 },
+    );
+  }
 
-    const allowedCategories = [
-      "All",
-      "Tech",
-      "E-commerce",
-      "Social Media",
-      "Digital Marketing",
-      "Other",
-    ];
+  const extension =
+    path.extname(imageFile.originalname).toLowerCase() ||
+    `.${String(imageFile.mimetype || "image/jpeg").split("/")[1] || "jpg"}`;
+  const fileName = `${Date.now()}-${slugifyFilePart(
+    imageFile.originalname,
+  )}${extension}`;
+  const uploadDir = path.join(process.cwd(), "public", "uploads", "blogs");
+  await fs.mkdir(uploadDir, { recursive: true });
+  await fs.writeFile(path.join(uploadDir, fileName), imageFile.buffer);
+
+  return `${req.protocol}://${req.get("host")}/uploads/blogs/${fileName}`;
+};
+
+export const addBlog = async (req, res) => {
+  try {
+    const {
+      title,
+      subTitle,
+      paragraph,
+      description,
+      category,
+      isPublished,
+      author: authorId,
+    } = req.body;
+    const imageFile = req.file;
+
+    if (!title || !subTitle || !paragraph || !description || !category || !imageFile) {
+      return res.status(400).json({
+        success: false,
+        message: "Title, summary, opening paragraph, description, category, and image are required.",
+      });
+    }
+
+    const image = await uploadBlogImage(imageFile, req);
+
     if (!allowedCategories.includes(category)) {
       return res.status(400).json({
         success: false,
@@ -55,20 +115,27 @@ export const addBlog = async (req, res) => {
       .replace(/ /g, "-")
       .replace(/[^\w-]+/g, "");
 
-    const author = req.user?.id;
+    const author = authorId || req.user?.id;
     if (!author) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    if (!mongoose.Types.ObjectId.isValid(author)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid author selected.",
+      });
     }
 
     // Create the blog
     const blog = new Blog({
       title,
-      subTitle,
+      subTitle: subTitle.trim(),
+      paragraph: paragraph.trim(),
       description,
       category,
       image,
       slug,
-      isPublished: isPublished ?? false, // default false if not provided
+      isPublished: isPublished === true || isPublished === "true",
       author,
     });
 
@@ -81,9 +148,11 @@ export const addBlog = async (req, res) => {
     });
   } catch (error) {
     console.error("Add Blog Error:", error);
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       success: false,
-      message: "Internal server error",
+      message: error.statusCode
+        ? error.message
+        : "Internal server error",
     });
   }
 };
@@ -105,6 +174,9 @@ export const getBlogBySlug = async (req, res) => {
       slug,
       isPublished: true,
       isDeleted: false,
+    }).populate({
+      path: "author",
+      select: "firstName lastName email role",
     });
     console.log(blog);
     if (!blog) {
@@ -140,6 +212,10 @@ export const getAllBlog = async (req, res) => {
 
     // Fetch paginated blogs, sort by newest first
     const blogs = await Blog.find({ isPublished: true })
+      .populate({
+        path: "author",
+        select: "firstName lastName email role",
+      })
       .sort({
         createdAt: -1,
       })
@@ -191,7 +267,10 @@ export const getBlogById = async (req, res) => {
       });
     }
 
-    const blog = await Blog.findById(blogId);
+    const blog = await Blog.findById(blogId).populate({
+      path: "author",
+      select: "firstName lastName email role",
+    });
 
     if (!blog) {
       return res.status(404).json({
@@ -300,26 +379,19 @@ export const EditBlogs = async (req, res) => {
       });
     }
 
-    const { title, subTitle, description, category, isPublished } = req.body;
+    const { title, subTitle, paragraph, description, category, isPublished, author } =
+      req.body;
     const imageFile = req.file;
 
     // Validate required fields
-    if (!title || !description || !category) {
+    if (!title || !subTitle || !paragraph || !description || !category) {
       return res.status(400).json({
         success: false,
-        message: "Title, description, and category are required.",
+        message: "Title, summary, opening paragraph, description, and category are required.",
       });
     }
 
     // Validate category
-    const allowedCategories = [
-      "All",
-      "Tech",
-      "E-commerce",
-      "Social Media",
-      "Digital Marketing",
-      "Other",
-    ];
     if (!allowedCategories.includes(category)) {
       return res.status(400).json({
         success: false,
@@ -330,21 +402,7 @@ export const EditBlogs = async (req, res) => {
     // Handle image upload if a new file is provided
     let image = blog.image; // keep old image if no new file
     if (imageFile) {
-      const fileBase64 = imageFile.buffer.toString("base64");
-      const response = await imagekit.upload({
-        file: fileBase64,
-        fileName: imageFile.originalname,
-        folder: "/blogs",
-      });
-
-      image = imagekit.url({
-        path: response.filePath,
-        transformation: [
-          { quality: "auto" },
-          { format: "webp" },
-          { width: "1280" },
-        ],
-      });
+      image = await uploadBlogImage(imageFile, req);
     }
 
     // Update slug if title changed
@@ -359,10 +417,23 @@ export const EditBlogs = async (req, res) => {
 
     // Update blog fields
     blog.title = title;
-    blog.subTitle = subTitle;
+    blog.subTitle = subTitle.trim();
+    blog.paragraph = paragraph.trim();
     blog.description = description;
     blog.category = category;
-    blog.isPublished = isPublished ?? blog.isPublished; // keep old value if not provided
+    if (author) {
+      if (!mongoose.Types.ObjectId.isValid(author)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid author selected.",
+        });
+      }
+      blog.author = author;
+    }
+    blog.isPublished =
+      typeof isPublished === "undefined"
+        ? blog.isPublished
+        : isPublished === true || isPublished === "true"; // keep old value if not provided
     blog.slug = slug;
     blog.image = image;
 
@@ -375,9 +446,11 @@ export const EditBlogs = async (req, res) => {
     });
   } catch (error) {
     console.error("Edit Blog Error:", error);
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       success: false,
-      message: "Internal server error",
+      message: error.statusCode
+        ? error.message
+        : "Internal server error",
     });
   }
 };
@@ -451,7 +524,12 @@ export const getBlogsComment = async (req, res) => {
 
 export const getAllBlogAdmin = async (req, res) => {
   try {
-    const blogs = await Blog.find({}).sort({ createdAt: -1 });
+    const blogs = await Blog.find({})
+      .populate({
+        path: "author",
+        select: "firstName lastName email role",
+      })
+      .sort({ createdAt: -1 });
     res.json({ success: true, message: "All blogs data(Admin)", blogs });
   } catch (error) {
     return res.status(500).json({

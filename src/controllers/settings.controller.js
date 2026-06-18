@@ -17,6 +17,9 @@ export const getPublicSettings = async (req, res) => {
       settings = await SiteSettings.create({
         siteTitle: "Mozno Wealth - Your Personal CFO",
         siteDescription: "Comprehensive wealth management solutions tailored for you. Expert financial planning, investment advisory, and wealth optimization services.",
+        contactInfo: {
+          mapLink: "https://maps.app.goo.gl/STjHCGiRPECf3hJR6?g_st=ac",
+        },
       });
     }
 
@@ -49,6 +52,9 @@ export const getSettings = async (req, res) => {
       settings = await SiteSettings.create({
         siteTitle: "Mozno Wealth - Your Personal CFO",
         siteDescription: "Comprehensive wealth management solutions tailored for you. Expert financial planning, investment advisory, and wealth optimization services.",
+        contactInfo: {
+          mapLink: "https://maps.app.goo.gl/STjHCGiRPECf3hJR6?g_st=ac",
+        },
       });
     }
 
@@ -84,6 +90,9 @@ export const updateSettings = async (req, res) => {
       settings = new SiteSettings({
         siteTitle: "Mozno Wealth - Your Personal CFO",
         siteDescription: "Comprehensive wealth management solutions tailored for you.",
+        contactInfo: {
+          mapLink: "https://maps.app.goo.gl/STjHCGiRPECf3hJR6?g_st=ac",
+        },
       });
     }
 
@@ -102,6 +111,7 @@ export const updateSettings = async (req, res) => {
       if (contactInfo.whatsapp !== undefined) settings.contactInfo.whatsapp = contactInfo.whatsapp;
       if (contactInfo.address !== undefined) settings.contactInfo.address = contactInfo.address;
       if (contactInfo.mapLink !== undefined) settings.contactInfo.mapLink = contactInfo.mapLink;
+      if (contactInfo.mapEmbedUrl !== undefined) settings.contactInfo.mapEmbedUrl = contactInfo.mapEmbedUrl;
     }
 
     // Update social links
