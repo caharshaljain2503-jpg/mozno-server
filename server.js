@@ -60,6 +60,26 @@ const allowedOrigins = [
   "https://admin.mozno.in",
 ];
 
+const normalizeOrigin = (origin) => String(origin || "").replace(/\/+$/, "");
+
+const envAllowedOrigins = [
+  process.env.ADMIN_URL,
+  process.env.CLIENT_URL,
+  process.env.FRONTEND_URL,
+  process.env.WEBSITE_URL,
+  process.env.CORS_ORIGIN,
+  process.env.CORS_ORIGINS,
+  process.env.ALLOWED_ORIGINS,
+]
+  .flatMap((value) => String(value || "").split(","))
+  .map((origin) => normalizeOrigin(origin.trim()))
+  .filter(Boolean);
+
+const allowedOriginSet = new Set([
+  ...allowedOrigins.map(normalizeOrigin),
+  ...envAllowedOrigins,
+]);
+
 const isAllowedVercelPreviewOrigin = (origin) => {
   try {
     const { hostname, protocol } = new URL(origin);
@@ -108,7 +128,7 @@ app.use(
         process.env.NODE_ENV !== "production" && isDevLocalHttpOrigin(origin);
 
       if (
-        allowedOrigins.includes(origin) ||
+        allowedOriginSet.has(normalizeOrigin(origin)) ||
         isAllowedVercelPreviewOrigin(origin) ||
         allowDevLocal
       ) {
@@ -131,7 +151,7 @@ app.options("*", cors({
     const allowDevLocal =
       process.env.NODE_ENV !== "production" && isDevLocalHttpOrigin(origin);
     if (
-      allowedOrigins.includes(origin) ||
+      allowedOriginSet.has(normalizeOrigin(origin)) ||
       isAllowedVercelPreviewOrigin(origin) ||
       allowDevLocal
     ) {
@@ -319,7 +339,7 @@ const HOST = process.env.HOST || '0.0.0.0';
 app.listen(PORT, HOST, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📡 Allowed origins: ${allowedOrigins.join(', ')}`);
+  console.log(`📡 Allowed origins: ${Array.from(allowedOriginSet).join(', ')}`);
 });
 
 // Graceful shutdown
