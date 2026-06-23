@@ -28,6 +28,8 @@ const blogSchema = new Schema(
     category: {
       type: String,
       required: true,
+      trim: true,
+      maxlength: 60,
     },
     image: {
       type: String,
@@ -47,9 +49,36 @@ const blogSchema = new Schema(
       ref: "Admin",
       required: true,
     },
+    bylineName: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+      default: "",
+    },
+    bylineRole: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+      default: "",
+    },
     isDeleted: {
       type: Boolean,
       default: false,
+    },
+    views: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    likes: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    likedBy: {
+      type: [String],
+      default: [],
+      select: false,
     },
   },
   { timestamps: true },

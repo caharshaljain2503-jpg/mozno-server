@@ -5,25 +5,24 @@ import Comment from '../models/comment.model.js'
 import fs from "fs/promises";
 import path from "path";
 
-const allowedCategories = [
-  "All",
-  "Product Info",
-  "Price Updates",
-  "Technical Guides",
-  "Market Insights",
-  "Personal Finance",
-  "Tax Planning",
-  "Investments",
-  "Insurance",
-  "Retirement",
-  "Succession",
-  "Wealth Management",
-  "Tech",
-  "E-commerce",
-  "Social Media",
-  "Digital Marketing",
-  "Other",
-];
+const normalizeCategory = (category) =>
+  String(category || "")
+    .trim()
+    .replace(/\s+/g, " ");
+
+const validateCategory = (category) => {
+  const normalizedCategory = normalizeCategory(category);
+
+  if (!normalizedCategory) {
+    return { error: "Category is required." };
+  }
+
+  if (normalizedCategory.length > 60) {
+    return { error: "Category must be 60 characters or fewer." };
+  }
+
+  return { category: normalizedCategory };
+};
 
 const hasImageKitConfig =
   !!process.env.IMAGEKIT_PUBLIC_KEY &&
@@ -90,6 +89,8 @@ export const addBlog = async (req, res) => {
       category,
       isPublished,
       author: authorId,
+      bylineName,
+      bylineRole,
     } = req.body;
     const imageFile = req.file;
 
@@ -100,14 +101,15 @@ export const addBlog = async (req, res) => {
       });
     }
 
-    const image = await uploadBlogImage(imageFile, req);
-
-    if (!allowedCategories.includes(category)) {
+    const categoryValidation = validateCategory(category);
+    if (categoryValidation.error) {
       return res.status(400).json({
         success: false,
-        message: `Category must be one of: ${allowedCategories.join(", ")}`,
+        message: categoryValidation.error,
       });
     }
+
+    const image = await uploadBlogImage(imageFile, req);
 
     const slug = title
       .toLowerCase()
@@ -132,11 +134,13 @@ export const addBlog = async (req, res) => {
       subTitle: subTitle.trim(),
       paragraph: paragraph.trim(),
       description,
-      category,
+      category: categoryValidation.category,
       image,
       slug,
       isPublished: isPublished === true || isPublished === "true",
       author,
+      bylineName: String(bylineName || "").trim(),
+      bylineRole: String(bylineRole || "").trim(),
     });
 
     await blog.save();
@@ -186,10 +190,19 @@ export const getBlogBySlug = async (req, res) => {
       });
     }
 
+    const comments = await Comment.countDocuments({
+      blogId: blog._id,
+      status: "approved",
+      isApproved: true,
+    });
+
     return res.status(200).json({
       success: true,
       message: "Blog fetched successfully",
-      blog,
+      blog: {
+        ...blog.toObject(),
+        comments,
+      },
     });
   } catch (error) {
     console.error("Get Blog By Slug Error:", error);
@@ -202,16 +215,23 @@ export const getBlogBySlug = async (req, res) => {
 
 export const getAllBlog = async (req, res) => {
   try {
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.set("Pragma", "no-cache");
+    res.set("Expires", "0");
+
     // Parse pagination parameters
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
     // Fetch total count for pagination info
-    const totalBlogs = await Blog.countDocuments({ isPublished: true });
+    const totalBlogs = await Blog.countDocuments({
+      isPublished: true,
+      isDeleted: false,
+    });
 
     // Fetch paginated blogs, sort by newest first
-    const blogs = await Blog.find({ isPublished: true })
+    const blogs = await Blog.find({ isPublished: true, isDeleted: false })
       .populate({
         path: "author",
         select: "firstName lastName email role",
@@ -220,7 +240,29 @@ export const getAllBlog = async (req, res) => {
         createdAt: -1,
       })
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .lean();
+
+    const blogIds = blogs.map((blog) => blog._id);
+    const commentCounts = await Comment.aggregate([
+      {
+        $match: {
+          blogId: { $in: blogIds },
+          status: "approved",
+          isApproved: true,
+        },
+      },
+      { $group: { _id: "$blogId", count: { $sum: 1 } } },
+    ]);
+    const commentCountMap = new Map(
+      commentCounts.map((item) => [String(item._id), item.count]),
+    );
+    const blogsWithActivity = blogs.map((blog) => ({
+      ...blog,
+      views: Number(blog.views || 0),
+      likes: Number(blog.likes || 0),
+      comments: commentCountMap.get(String(blog._id)) || 0,
+    }));
 
     const totalPages = Math.ceil(totalBlogs / limit);
 
@@ -237,7 +279,7 @@ export const getAllBlog = async (req, res) => {
         hasNextPage: page < totalPages,
         hasPrevPage: page > 1,
       },
-      blogs,
+      blogs: blogsWithActivity,
     });
   } catch (error) {
     console.error("Get All Blogs Error:", error);
@@ -245,6 +287,78 @@ export const getAllBlog = async (req, res) => {
       success: false,
       message: "Internal server error",
     });
+  }
+};
+
+export const recordBlogView = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid blog ID" });
+    }
+
+    const blog = await Blog.findOneAndUpdate(
+      { _id: id, isPublished: true, isDeleted: false },
+      { $inc: { views: 1 } },
+      { new: true, select: "views likes" },
+    );
+
+    if (!blog) {
+      return res.status(404).json({ success: false, message: "Blog not found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      views: blog.views,
+      likes: blog.likes,
+    });
+  } catch (error) {
+    console.error("Record blog view error:", error);
+    return res.status(500).json({ success: false, message: "Failed to record view" });
+  }
+};
+
+export const toggleBlogLike = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const visitorId = String(req.body?.visitorId || "").trim().slice(0, 120);
+
+    if (!mongoose.Types.ObjectId.isValid(id) || !visitorId) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid blog and visitor IDs are required",
+      });
+    }
+
+    const existingBlog = await Blog.findOne({
+      _id: id,
+      isPublished: true,
+      isDeleted: false,
+    }).select("+likedBy likes");
+
+    if (!existingBlog) {
+      return res.status(404).json({ success: false, message: "Blog not found" });
+    }
+
+    const liked = existingBlog.likedBy.includes(visitorId);
+    const update = liked
+      ? { $pull: { likedBy: visitorId }, $inc: { likes: -1 } }
+      : { $addToSet: { likedBy: visitorId }, $inc: { likes: 1 } };
+
+    const blog = await Blog.findByIdAndUpdate(id, update, {
+      new: true,
+      select: "likes views likedBy",
+    }).select("+likedBy");
+
+    return res.status(200).json({
+      success: true,
+      liked: !liked,
+      likes: Math.max(0, Number(blog.likes || 0)),
+      views: Number(blog.views || 0),
+    });
+  } catch (error) {
+    console.error("Toggle blog like error:", error);
+    return res.status(500).json({ success: false, message: "Failed to update like" });
   }
 };
 
@@ -379,8 +493,17 @@ export const EditBlogs = async (req, res) => {
       });
     }
 
-    const { title, subTitle, paragraph, description, category, isPublished, author } =
-      req.body;
+    const {
+      title,
+      subTitle,
+      paragraph,
+      description,
+      category,
+      isPublished,
+      author,
+      bylineName,
+      bylineRole,
+    } = req.body;
     const imageFile = req.file;
 
     // Validate required fields
@@ -391,11 +514,11 @@ export const EditBlogs = async (req, res) => {
       });
     }
 
-    // Validate category
-    if (!allowedCategories.includes(category)) {
+    const categoryValidation = validateCategory(category);
+    if (categoryValidation.error) {
       return res.status(400).json({
         success: false,
-        message: `Category must be one of: ${allowedCategories.join(", ")}`,
+        message: categoryValidation.error,
       });
     }
 
@@ -420,7 +543,9 @@ export const EditBlogs = async (req, res) => {
     blog.subTitle = subTitle.trim();
     blog.paragraph = paragraph.trim();
     blog.description = description;
-    blog.category = category;
+    blog.category = categoryValidation.category;
+    blog.bylineName = String(bylineName || "").trim();
+    blog.bylineRole = String(bylineRole || "").trim();
     if (author) {
       if (!mongoose.Types.ObjectId.isValid(author)) {
         return res.status(400).json({

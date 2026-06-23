@@ -2,6 +2,17 @@ import SiteSettings from "../models/sitesettings.model.js";
 import SiteContent from "../models/sitecontent.model.js";
 import FAQ from "../models/faq.model.js";
 
+const DEFAULT_YOUTUBE_LINK = "https://www.youtube.com/@theawarenessinitiative";
+const LEGACY_YOUTUBE_LINK = "https://www.youtube.com/@awareness_initiative";
+
+const normalizeSocialLinks = (socialLinks = {}) => ({
+  ...socialLinks,
+  youtube:
+    !socialLinks.youtube || socialLinks.youtube === LEGACY_YOUTUBE_LINK
+      ? DEFAULT_YOUTUBE_LINK
+      : socialLinks.youtube,
+});
+
 // ================= PUBLIC SETTINGS =================
 export const getPublicSettings = async (req, res) => {
   try {
@@ -18,7 +29,7 @@ export const getPublicSettings = async (req, res) => {
         siteTitle: "Mozno Wealth - Your Personal CFO",
         siteDescription: "Comprehensive wealth management solutions tailored for you. Expert financial planning, investment advisory, and wealth optimization services.",
         contactInfo: {
-          mapLink: "https://maps.app.goo.gl/STjHCGiRPECf3hJR6?g_st=ac",
+          mapLink: "https://share.google/VNKicOtItWUL4lP5P",
         },
       });
     }
@@ -31,7 +42,7 @@ export const getPublicSettings = async (req, res) => {
         siteTitle: settings.siteTitle,
         siteDescription: settings.siteDescription,
         contactInfo: settings.contactInfo,
-        socialLinks: settings.socialLinks,
+        socialLinks: normalizeSocialLinks(settings.socialLinks),
       },
     });
   } catch (error) {
@@ -53,7 +64,7 @@ export const getSettings = async (req, res) => {
         siteTitle: "Mozno Wealth - Your Personal CFO",
         siteDescription: "Comprehensive wealth management solutions tailored for you. Expert financial planning, investment advisory, and wealth optimization services.",
         contactInfo: {
-          mapLink: "https://maps.app.goo.gl/STjHCGiRPECf3hJR6?g_st=ac",
+          mapLink: "https://share.google/VNKicOtItWUL4lP5P",
         },
       });
     }
@@ -81,6 +92,7 @@ export const updateSettings = async (req, res) => {
       favicon,
       contactInfo,
       googleAnalyticsId,
+      assessmentEmailContent,
       socialLinks,
     } = req.body;
 
@@ -91,7 +103,7 @@ export const updateSettings = async (req, res) => {
         siteTitle: "Mozno Wealth - Your Personal CFO",
         siteDescription: "Comprehensive wealth management solutions tailored for you.",
         contactInfo: {
-          mapLink: "https://maps.app.goo.gl/STjHCGiRPECf3hJR6?g_st=ac",
+          mapLink: "https://share.google/VNKicOtItWUL4lP5P",
         },
       });
     }
@@ -102,6 +114,9 @@ export const updateSettings = async (req, res) => {
     if (logo !== undefined) settings.logo = logo;
     if (favicon !== undefined) settings.favicon = favicon;
     if (googleAnalyticsId !== undefined) settings.googleAnalyticsId = googleAnalyticsId;
+    if (assessmentEmailContent !== undefined) {
+      settings.assessmentEmailContent = assessmentEmailContent;
+    }
     
     // Update contact info
     if (contactInfo) {

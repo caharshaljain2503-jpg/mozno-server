@@ -407,6 +407,65 @@ export const getAdminDetails = async (req, res) => {
   }
 };
 
+export const updateAdminProfile = async (req, res) => {
+  try {
+    const { firstName, lastName, email, currentPassword } = req.body;
+
+    if (!firstName?.trim() || !email?.trim() || !currentPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "First name, email, and current password are required",
+      });
+    }
+
+    const admin = await Admin.findById(req.user?.id);
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        message: "Admin not found",
+      });
+    }
+
+    if (!(await admin.comparePassword(currentPassword))) {
+      return res.status(401).json({
+        success: false,
+        message: "Current password is incorrect",
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    if (normalizedEmail !== admin.email) {
+      const existingAdmin = await Admin.findOne({ email: normalizedEmail });
+      if (existingAdmin) {
+        return res.status(400).json({
+          success: false,
+          message: "Email already in use",
+        });
+      }
+    }
+
+    admin.firstName = firstName.trim();
+    admin.lastName = String(lastName || "").trim();
+    admin.email = normalizedEmail;
+    await admin.save();
+
+    const data = admin.toObject();
+    delete data.password;
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      data,
+    });
+  } catch (error) {
+    console.error("Update admin profile error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to update profile",
+    });
+  }
+};
+
 // ==================== ADMIN CRUD CONTROLLERS ====================
 
 // @desc    Get all admins

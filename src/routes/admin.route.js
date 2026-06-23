@@ -11,6 +11,7 @@ import {
   sendOtp,
   toggleAdminStatus,
   updateAdmin,
+  updateAdminProfile,
   verifyOtp,
 } from "../controllers/admin.controller.js";
 import rateLimit from "express-rate-limit";
@@ -63,6 +64,7 @@ adminRouter.post("/verify-otp", authLimiter, verifyOtp);
 
 // ------ ADMIN USER MANAGEMENT (specific routes FIRST) ------
 adminRouter.get("/profile", authMiddleware, getAdminDetails);
+adminRouter.put("/profile", authMiddleware, updateAdminProfile);
 adminRouter.get("/stats", authMiddleware, getAdminStats);
 adminRouter.get("/users", authMiddleware, getAllAdmins);  // Changed from "/" to "/users"
 adminRouter.post("/users", authMiddleware, createAdmin);   // Changed from "/" to "/users"

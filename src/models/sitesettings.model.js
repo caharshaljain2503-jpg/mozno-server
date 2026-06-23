@@ -45,12 +45,12 @@ const siteSettingsSchema = new Schema(
       },
       address: {
         type: String,
-        default: "106, Shyamkamal 'C' Building, Agarwal Market, Vile Parle East, Mumbai - 400 057",
+        default: "C, 106, Shyam Kamal Rd, next to Rajwadi Chai, above IIFL Office, Agarwal Market, Vile Parle East, Vile Parle, Mumbai, Maharashtra 400057",
         trim: true,
       },
       mapLink: {
         type: String,
-        default: "https://maps.app.goo.gl/STjHCGiRPECf3hJR6?g_st=ac",
+        default: "https://share.google/VNKicOtItWUL4lP5P",
         trim: true,
       },
       mapEmbedUrl: {
@@ -67,13 +67,31 @@ const siteSettingsSchema = new Schema(
       trim: true,
     },
 
+    // Assessment notification email
+    assessmentEmailContent: {
+      type: String,
+      default: [
+        "{{assessmentType}} Assessment Result",
+        "",
+        "Result: {{profileLabel}}",
+        "Total score: {{totalScore}}",
+        "Name: {{name}}",
+        "Email: {{email}}",
+        "Phone: {{phone}}",
+        "",
+        "Answers:",
+        "{{answers}}",
+      ].join("\n"),
+      maxlength: 20000,
+    },
+
     // Social Media
     socialLinks: {
       facebook: { type: String, default: "" },
       twitter: { type: String, default: "" },
       instagram: { type: String, default: "" },
       linkedin: { type: String, default: "https://www.linkedin.com/in/harshalvjain/" },
-      youtube: { type: String, default: "https://www.youtube.com/@awareness_initiative" },
+      youtube: { type: String, default: "https://www.youtube.com/@theawarenessinitiative" },
     },
   },
   { timestamps: true },

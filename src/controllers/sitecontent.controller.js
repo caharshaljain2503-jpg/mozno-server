@@ -1,5 +1,8 @@
 import SiteContent from "../models/sitecontent.model.js";
 
+const DEFAULT_YOUTUBE_LINK = "https://www.youtube.com/@theawarenessinitiative";
+const LEGACY_YOUTUBE_LINK = "https://www.youtube.com/@awareness_initiative";
+
 /** Default posts for new SiteContent documents (matches former website hardcoded data). */
 const DEFAULT_SOCIAL_POSTS = {
   youtubeVideos: [
@@ -133,7 +136,7 @@ const defaultPayload = {
   socialMedia: {
     enabled: true,
     links: {
-      youtube: { enabled: true, url: "https://www.youtube.com/@awareness_initiative" },
+      youtube: { enabled: true, url: "https://www.youtube.com/@theawarenessinitiative" },
       linkedin: { enabled: true, url: "https://www.linkedin.com/in/harshalvjain/" },
       instagram: { enabled: true, url: "https://www.instagram.com/the_awareness_initiative" },
       twitter: { enabled: false, url: "" },
@@ -147,6 +150,10 @@ const defaultPayload = {
 const getOrCreate = async () => {
   let doc = await SiteContent.findOne();
   if (!doc) doc = await SiteContent.create(defaultPayload);
+  if (doc.socialMedia?.links?.youtube?.url === LEGACY_YOUTUBE_LINK) {
+    doc.socialMedia.links.youtube.url = DEFAULT_YOUTUBE_LINK;
+    await doc.save();
+  }
   return doc;
 };
 
@@ -226,4 +233,3 @@ export const updateSiteContentAdmin = async (req, res) => {
     return res.status(500).json({ success: false, message: "Failed to update site content" });
   }
 };
-

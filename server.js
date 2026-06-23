@@ -202,6 +202,7 @@ try {
 // Apply rate limiter to all routes — skip OPTIONS preflight
 app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return next();
+  if (req.method === 'GET' && req.path.startsWith('/api/blogs')) return next();
   return limiter(req, res, next);
 });
 
